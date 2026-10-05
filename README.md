@@ -1,4 +1,6 @@
 #  CNN ile Çiçek Türü Sınıflandırma
+<img width="1578" height="851" alt="Ekran görüntüsü 2026-10-05 215855" src="https://github.com/user-attachments/assets/5212264c-0009-4a94-aa65-e64ce63bccab" />
+
 
 Bu proje, çiçek görsellerini sınıflandırmak amacıyla **TensorFlow ve Keras** kullanılarak geliştirilmiş bir Evrişimsel Sinir Ağı (Convolutional Neural Network - CNN) uygulamasıdır.
 
@@ -313,3 +315,7 @@ Projenin sonraki aşamalarında:
 gibi geliştirmeler yapılabilir.
 
 ---
+<img width="1582" height="842" alt="Ekran görüntüsü 2026-10-05 215839" src="https://github.com/user-attachments/assets/94c15b03-431b-4e83-85a7-ca1b3b875337" />
+<img width="1585" height="848" alt="Ekran görüntüsü 2026-10-05 215806" src="https://github.com/user-attachments/assets/5fa4414f-7d5e-4d03-bd0c-cc47186ec883" />
+<img width="1577" height="852" alt="Ekran görüntüsü 2026-10-05 215723" src="https://github.com/user-attachments/assets/d897b46e-4a95-4041-8f22-3079f9e1ea90" />
+
