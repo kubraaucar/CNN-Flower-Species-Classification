@@ -239,7 +239,7 @@ pip install -r requirements.txt
 
 ---
 
-## ▶️ Uygulamayı Çalıştırma
+##  Uygulamayı Çalıştırma
 
 Gradio uygulamasını başlatmak için:
 
