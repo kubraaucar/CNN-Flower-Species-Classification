@@ -9,9 +9,9 @@ from tensorflow_datasets import load #veri seti yükleme
 from tensorflow.data import AUTOTUNE #VERİ SETİ OPTİMİZASYONU
 from tensorflow.keras.models import Sequential, load_model 
 from tensorflow.keras.layers import(
-    Conv2D, #2D convolutional layer 
-    MaxPooling2D, # max pooling layer 
-    Flatten, # çok botutlu veriyi tek boyutlu hale getirme
+    Conv2D, #2D convolutional layer
+    MaxPooling2D, # max pooling layer
+    GlobalAveragePooling2D, # her feature map'in ortalamasını alarak tek boyutlu hale getirme
     Dense, # tam baglantili katman , karar verme(classification)
     Dropout # rastgele noronları kapatma ve overfitting engelleme, ezberi engeller
 )
@@ -22,8 +22,13 @@ from tensorflow.keras.callbacks import(
     ModelCheckpoint # model kaydetme, en iyi modeli kaybetmemek
 )
 
+import json
+import os
+
 import tensorflow as tf
-import matplotlib.pyplot as plt 
+import matplotlib
+matplotlib.use("Agg") #grafikleri pencere acmadan dosyaya kaydet
+import matplotlib.pyplot as plt
 
 import numpy as np
 
@@ -32,6 +37,14 @@ from sklearn.metrics import (
     classification_report,
     ConfusionMatrixDisplay
 )
+
+# tekrarlanabilirlik: python, numpy ve tensorflow icin sabit seed
+SEED = 42
+tf.keras.utils.set_random_seed(SEED)
+tf.config.experimental.enable_op_determinism() #ayni seed ile ayni sonuclari almak icin
+
+IMAGES_DIR = "images" #grafiklerin kaydedilecegi klasor
+os.makedirs(IMAGES_DIR, exist_ok=True)
 
 # veri seti yükleme
 
@@ -60,7 +73,8 @@ for i, (image, label) in enumerate(ds_train.take(3)):
     ax.axis("off") #eksenleri kapatma
 
 plt.tight_layout()
-plt.show() #grafiği gosterme 
+plt.savefig(os.path.join(IMAGES_DIR, "sample_images.png"), dpi=120) #grafiği kaydetme
+plt.close()
 
 
 IMG_SIZE = (180, 180)
@@ -92,7 +106,7 @@ def preprocess_val(image, label):
 ds_train = (
     ds_train
     .map(preprocess_train, num_parallel_calls=AUTOTUNE) #on isleme ve augmentasyon
-    .shuffle(1000) #karsılastırma 
+    .shuffle(1000, seed=SEED) #karıstırma
     .batch(32) #batch boyutu
     .prefetch(AUTOTUNE) #veri setini önceden hazırlamak
 )
@@ -127,7 +141,7 @@ model = Sequential([
     MaxPooling2D((2,2)), #2x2 max pooling
 
     #Classification Layers
-    Flatten(), #çok boyutlu veriyi vektöre çevirme
+    GlobalAveragePooling2D(), #Flatten yerine: parametre sayısını büyük ölçüde azaltır, overfitting'i azaltır
     Dense(128, activation = "relu"),
     Dropout(0.5), #overfitting i engellemek için dropout
     Dense(ds_info.features["label"].num_classes, activation = "softmax")  #cikis katmanı, softmax aktivasyonu
@@ -136,8 +150,8 @@ model = Sequential([
 
 # callback
 callbacks = [
-    #eger val loss 3 epoch bpyunca iyilesmezse egitimi durdur ve en iyi agırlıkları yukle
-    EarlyStopping(monitor = "val_loss", patience = 3, restore_best_weights = True),
+    #eger val loss 5 epoch boyunca iyilesmezse egitimi durdur ve en iyi agırlıkları yukle
+    EarlyStopping(monitor = "val_loss", patience = 5, restore_best_weights = True),
 
     #val loss 2 epoch boyunca iyilesmezse learning rate 0.2 çarpanı ile azalt
     ReduceLROnPlateau(monitor = "val_loss", factor = 0.2, patience = 2, verbose = 1, min_lr = 1e-9), #ogrenme oranını azaltma
@@ -164,7 +178,7 @@ print(model.summary()) #model ozeti
 history = model.fit(
     ds_train, #egitim veri seti
     validation_data = ds_val, #validasyon veri seti
-    epochs = 10, #epoch sayısı
+    epochs = 40, #maksimum epoch sayısı, EarlyStopping daha önce durdurabilir
     callbacks = callbacks, 
     verbose = 1 #egitim ilerlemesini göster
 )
@@ -214,6 +228,15 @@ print(
 # Confusion Matrix
 cm = confusion_matrix(y_true, y_pred)
 
+# sonuçları dosyaya kaydet (README ve karşılaştırma için)
+with open(os.path.join(IMAGES_DIR, "cnn_gap_metrics.json"), "w") as f:
+    json.dump({
+        "test_loss": test_loss,
+        "test_accuracy": test_accuracy,
+        "report": classification_report(y_true, y_pred, target_names=class_names, output_dict=True),
+        "confusion_matrix": cm.tolist(),
+    }, f, indent=2)
+
 disp = ConfusionMatrixDisplay(
     confusion_matrix=cm,
     display_labels=class_names
@@ -221,7 +244,9 @@ disp = ConfusionMatrixDisplay(
 
 disp.plot(cmap="Blues")
 plt.title("Confusion Matrix")
-plt.show()
+plt.tight_layout()
+plt.savefig(os.path.join(IMAGES_DIR, "cnn_gap_confusion_matrix.png"), dpi=120)
+plt.close()
 
 
 # model evaluation
@@ -246,5 +271,6 @@ plt.title("Model Loss")
 plt.legend()
 
 plt.tight_layout()
-plt.show()  #grafigi goster
+plt.savefig(os.path.join(IMAGES_DIR, "cnn_gap_training_curves.png"), dpi=120)  #grafigi kaydet
+plt.close()
 

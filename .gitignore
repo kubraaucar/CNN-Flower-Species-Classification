@@ -13,3 +13,5 @@ __pycache__/
 Thumbs.db
 
 .gradio/
+# 80MB baseline model backup, kept locally only
+baseline_model.keras

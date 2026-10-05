@@ -1,10 +1,6 @@
 import tensorflow as tf
-import numpy as np
 
-# Modelin beklediği görüntü boyutu
-IMG_SIZE = (180, 180)
-
-# Çiçek sınıfları
+# Çiçek sınıfları (tf_flowers etiket sırası)
 CLASS_NAMES = [
     "dandelion",
     "daisy",
@@ -13,11 +9,34 @@ CLASS_NAMES = [
     "roses"
 ]
 
-# Eğitilmiş modeli yükle
-model = tf.keras.models.load_model("best_model.keras")
+# Her model için dosya yolu, girdi boyutu ve 0-1 normalizasyonu gerekip gerekmediği.
+# MobileNetV2 modeli ham 0-255 piksel alır, ölçekleme modelin içinde yapılır.
+MODEL_CONFIGS = {
+    "MobileNetV2 (Transfer Learning)": {
+        "path": "mobilenetv2_model.keras",
+        "img_size": (224, 224),
+        "normalize": False,
+    },
+    "Özel CNN": {
+        "path": "best_model.keras",
+        "img_size": (180, 180),
+        "normalize": True,
+    },
+}
+
+DEFAULT_MODEL = "MobileNetV2 (Transfer Learning)"
+
+# Modelleri ilk kullanımda yükle ve sakla
+_loaded_models = {}
 
 
-def preprocess_image(image):
+def get_model(model_name):
+    if model_name not in _loaded_models:
+        _loaded_models[model_name] = tf.keras.models.load_model(MODEL_CONFIGS[model_name]["path"])
+    return _loaded_models[model_name]
+
+
+def preprocess_image(image, img_size, normalize):
     """
     Tahmin edilecek görüntüyü modelin beklediği
     formata dönüştürür.
@@ -26,28 +45,33 @@ def preprocess_image(image):
     # Görüntüyü TensorFlow tensorüne dönüştür
     image = tf.convert_to_tensor(image)
 
-    # 180x180 boyutuna getir
-    image = tf.image.resize(image, IMG_SIZE)
+    # Modelin beklediği boyuta getir
+    image = tf.image.resize(image, img_size)
 
-    # 0-255 değerlerini 0-1 arasına getir
-    image = tf.cast(image, tf.float32) / 255.0
+    image = tf.cast(image, tf.float32)
+
+    # Özel CNN 0-1 aralığında piksel bekler
+    if normalize:
+        image = image / 255.0
 
     # Model batch formatı beklediği için
-    # (180, 180, 3) -> (1, 180, 180, 3)
+    # (H, W, 3) -> (1, H, W, 3)
     image = tf.expand_dims(image, axis=0)
 
     return image
 
 
-def predict_image(image):
+def predict_image(image, model_name=DEFAULT_MODEL):
     """
     Görüntüyü sınıflandırır ve
     sınıfların olasılıklarını döndürür.
     """
 
-    image = preprocess_image(image)
+    config = MODEL_CONFIGS[model_name]
 
-    predictions = model.predict(image, verbose=0)
+    image = preprocess_image(image, config["img_size"], config["normalize"])
+
+    predictions = get_model(model_name).predict(image, verbose=0)
 
     probabilities = predictions[0]
 
@@ -57,4 +81,3 @@ def predict_image(image):
     }
 
     return results
-
