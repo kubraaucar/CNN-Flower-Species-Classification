@@ -7,7 +7,7 @@ CNN ile siniflandirma modeli olusturma ve problemi çözme
 # import libraries
 from tensorflow_datasets import load #veri seti yükleme
 from tensorflow.data import AUTOTUNE #VERİ SETİ OPTİMİZASYONU
-from tensorflow.keras.models import Sequential 
+from tensorflow.keras.models import Sequential, load_model 
 from tensorflow.keras.layers import(
     Conv2D, #2D convolutional layer 
     MaxPooling2D, # max pooling layer 
@@ -25,15 +25,25 @@ from tensorflow.keras.callbacks import(
 import tensorflow as tf
 import matplotlib.pyplot as plt 
 
+import numpy as np
+
+from sklearn.metrics import (
+    confusion_matrix,
+    classification_report,
+    ConfusionMatrixDisplay
+)
+
 # veri seti yükleme
 
-(ds_train, ds_val), ds_info = load(
-    "tf_flowers", #veri seti ismi
-    split = ["train[:80%]", #veri setinin %80 i eğitim için
-           "train[80%:]"], #veri setinin %20 si test için
-
-    as_supervised=True, #veri setinin görsel etiket çiftinin olması
-    with_info=True # veri seti hakkında bilgi alma
+(ds_train, ds_val, ds_test), ds_info = load(
+    "tf_flowers",
+    split=[
+        "train[:70%]",      # %70 eğitim
+        "train[70%:85%]",   # %15 validation
+        "train[85%:]"       # %15 test
+    ],
+    as_supervised=True,
+    with_info=True
 )
 
 print(ds_info.features) #veri seti hakkında bilgi yazdırma
@@ -95,6 +105,13 @@ ds_val = (
     .prefetch(AUTOTUNE) #veri setini önceden hazırlamak
 )
 
+ds_test = (
+    ds_test
+    .map(preprocess_val, num_parallel_calls=AUTOTUNE)
+    .batch(32)
+    .prefetch(AUTOTUNE)
+)
+
 # CNN modelini olusturma
 
 model = Sequential([
@@ -126,7 +143,11 @@ callbacks = [
     ReduceLROnPlateau(monitor = "val_loss", factor = 0.2, patience = 2, verbose = 1, min_lr = 1e-9), #ogrenme oranını azaltma
 
     #her epoch sonunda eger model daha iyiise kaybolur
-    ModelCheckpoint("best_model.h5", save_best_only=True) #model kaydetme , en iyi modeli kaydet
+    ModelCheckpoint(
+        "best_model.keras",
+        monitor="val_loss",
+        save_best_only=True
+) #model kaydetme , en iyi modeli kaydet
 ]
 
 
@@ -147,6 +168,60 @@ history = model.fit(
     callbacks = callbacks, 
     verbose = 1 #egitim ilerlemesini göster
 )
+# Validation loss'a göre kaydedilen en iyi modeli yükle
+model = load_model("best_model.keras")
+
+# Test veri seti üzerinde modeli değerlendir
+test_loss, test_accuracy = model.evaluate(ds_test)
+
+print(f"Test Loss: {test_loss:.4f}")
+print(f"Test Accuracy: {test_accuracy:.4f}")
+
+# Gerçek etiketler ve model tahminleri
+y_true = []
+y_pred = []
+
+for images, labels in ds_test:
+
+    predictions = model.predict(images, verbose=0)
+
+    predicted_classes = np.argmax(predictions, axis=1)
+
+    y_true.extend(labels.numpy())
+    y_pred.extend(predicted_classes)
+
+y_true = np.array(y_true)
+y_pred = np.array(y_pred)
+
+
+# Sınıf isimleri
+class_names = ds_info.features["label"].names
+
+print("Sınıflar:", class_names)
+
+
+# Precision, Recall ve F1-score
+print("\nClassification Report:")
+
+print(
+    classification_report(
+        y_true,
+        y_pred,
+        target_names=class_names
+    )
+)
+
+# Confusion Matrix
+cm = confusion_matrix(y_true, y_pred)
+
+disp = ConfusionMatrixDisplay(
+    confusion_matrix=cm,
+    display_labels=class_names
+)
+
+disp.plot(cmap="Blues")
+plt.title("Confusion Matrix")
+plt.show()
 
 
 # model evaluation
