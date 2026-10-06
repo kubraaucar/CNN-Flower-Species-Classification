@@ -86,7 +86,7 @@ model.compile(
 )
 model.summary()
 
-checkpoint = ModelCheckpoint(MODEL_PATH, monitor="val_loss", save_best_only=True)
+checkpoint = ModelCheckpoint(MODEL_PATH, monitor="val_loss", save_best_only=True, verbose=1)
 history_1 = model.fit(
     ds_train,
     validation_data=ds_val,
@@ -102,6 +102,11 @@ history_1 = model.fit(
 base_model.trainable = True
 for layer in base_model.layers[:-FINE_TUNE_LAYERS]:
     layer.trainable = False
+# açılan katmanlardaki BatchNorm'lar donuk kalır: ImageNet istatistikleri ve gamma/beta
+# değerleri korunur, katmanları açınca görülen ani loss sıçramasını azaltmak için
+for layer in base_model.layers[-FINE_TUNE_LAYERS:]:
+    if isinstance(layer, layers.BatchNormalization):
+        layer.trainable = False
 
 model.compile(
     optimizer=Adam(learning_rate=1e-5),
@@ -114,10 +119,11 @@ history_2 = model.fit(
     validation_data=ds_val,
     epochs=20,  # EarlyStopping daha önce durdurabilir
     callbacks=[
-        EarlyStopping(monitor="val_loss", patience=3, restore_best_weights=True),
+        # katmanlar açıldıktan sonraki ilk epoch'lardaki geçici bozulmayı atlatmak için patience 5
+        EarlyStopping(monitor="val_loss", patience=5, restore_best_weights=True),
         # sadece 1. aşamanın en iyi val_loss değerinden daha iyiyse kaydet
         ModelCheckpoint(MODEL_PATH, monitor="val_loss", save_best_only=True,
-                        initial_value_threshold=checkpoint.best),
+                        initial_value_threshold=checkpoint.best, verbose=1),
     ]
 )
 

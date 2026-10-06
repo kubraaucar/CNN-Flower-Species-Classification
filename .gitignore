@@ -13,8 +13,9 @@ __pycache__/
 Thumbs.db
 
 .gradio/
-# 80MB baseline model backup, kept locally only
+# Local-only model backups
 baseline_model.keras
+mobilenetv2_frozen.keras
 
 # Claude Code local settings
 .claude/settings.local.json
