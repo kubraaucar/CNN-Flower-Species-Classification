@@ -39,7 +39,7 @@ Ham metrikler ve confusion matrix'ler `images/*_metrics.json` dosyalarında.
 ## Yorumlar
 
 - **Kendi CNN'imin gelişimi: %73.45 → %70.55 → %83.09.**
-  - **GAP tek başına underfit oldu.** Eğitim accuracy'si yaklaşık %72, validation accuracy'si yaklaşık %69 kaldı. Baseline'ın kapasitesi büyük ölçüde Flatten'dan sonraki 6.4M parametrelik Dense katmanındaydı. Üç conv bloğundan sonra her nöronun gördüğü alan yaklaşık 22×22 piksel, bu yüzden model yerel renk ve doku ortalamasıyla karar veriyordu. Buna ek olarak ReduceLROnPlateau patience 2 olduğu için LR çok hızlı düştü.
+  - **GAP tek başına underfit oldu.** Eğitim accuracy'si yaklaşık %72, validation accuracy'si yaklaşık %69 kaldı. Baseline'ın kapasitesi büyük ölçüde Flatten'dan sonraki 6.55M parametrelik Dense katmanındaydı (6.65M'nin içinden). Üç conv bloğundan sonra her nöronun gördüğü alan yaklaşık 22×22 piksel, bu yüzden model yerel renk ve doku ortalamasıyla karar veriyordu. Buna ek olarak ReduceLROnPlateau patience 2 olduğu için LR çok hızlı düştü.
   - **Derin CNN bu teşhisle tasarlandı.** 4. conv bloğu (256 filtre) görüş alanını genişletti. BatchNorm eğitimi hızlandırdı ve stabil hale getirdi. ReduceLROnPlateau patience'ı 3'e çıkarıldı. Model 32. epoch'ta durdu, en iyi epoch 27 oldu. Eğitim accuracy'si %83, validation accuracy'si %81, yani underfitting kalmadı. Sonuç baseline'dan 9.6 puan daha iyi ve parametre sayısı 16 kat daha az.
 - **MobileNetV2 fine-tuning'i: BatchNorm'u donuk tutmak belirleyici oldu.**
   - **1. deneme (açılan katmanlardaki BN eğitilebilir, patience 3):** katmanlar açılınca eğitim loss'u 0.27'den 0.50'ye sıçradı ve validation loss kötüleşti. Fine-tuning 4 epoch sonra durdu ve 1. aşama modeli seçildi. Grafik: `images/mobilenetv2_ft_trainable_bn_training_curves.png`.
@@ -83,6 +83,26 @@ Ham metrikler ve confusion matrix'ler `images/*_metrics.json` dosyalarında.
   - `create_repo(space_sdk="gradio")` çağrısı **402 Payment Required** döndürdü: "Static Spaces are free for everyone, but hosting Gradio and Docker Spaces on free cpu-basic requires a PRO subscription."
   - Space oluşturulmadı, Hub'da yarım kalan bir şey yok.
 
+## README (8. adım)
+
+- **Yapı:**
+  1. Demo görüntüsü, kısa özet ve dört modelin karşılaştırma tablosu
+  2. Deney hikâyesi: baseline → GAP neden underfit oldu → derin CNN → MobileNetV2 → fine-tuning'deki BatchNorm sorunu
+  3. Eğitim grafikleri ve confusion matrix'ler
+  4. Gül–lale analizi ve örnek görüntü
+  5. Kurulum, çalıştırma ve eğitim talimatları
+  6. Proje yapısı ve gelecek çalışmalar
+- **Model seçimi:** checkpoint'lerin validation loss'a göre seçildiği ve fine-tuning kararının test sonucuna bakılmadan verildiği belirtildi.
+- **Görüntüler:**
+  - Ekran görüntülerinin adları ASCII'ye çevrildi: `images/demo_tulips.png` (en üstte, model seçimi görünüyor), `images/demo_daisy.png` ve `images/demo_rose.png` (çalıştırma bölümünde yan yana).
+  - `images/rose_tulip_example.png`: test setinden sarı-turuncu gül. Modellerin tahminleriyle birlikte gül–lale bölümünde kullanılıyor.
+- **Kaldırılanlar:** eski Türkçe README'nin tamamı, "eklenecektir" bölümü ve GitHub'a yüklenmiş dağınık ekran görüntüleri.
+- **Doğrulama:**
+  - README'deki görüntü yollarının hepsi mevcut.
+  - Baseline'daki Dense katmanının parametre sayısı (6,553,728) modelden okunarak doğrulandı.
+  - Alıcı alan (receptive field) hesabı: 3 blokta 22 piksel, 4 blokta 46 piksel.
+- **Bilinen tutarsızlık:** Gradio arayüzü hâlâ Türkçe ("Çiçek Fotoğrafı Yükle", "Özel CNN"). README bunu açıklıyor ve gelecek çalışmalara ekliyor.
+
 ## Yapılan değişiklikler
 
 - `cnn.py`:
@@ -108,22 +128,17 @@ Ham metrikler ve confusion matrix'ler `images/*_metrics.json` dosyalarında.
 
 - [x] 1. Hazırlık: branch açıldı, baseline yedeklendi, seed eklendi
 - [x] 2. CNN iyileştirme: GAP (%70.55), ardından derin CNN (%83.09)
-- [~] 3. Grafikler ve confusion matrix kaydediliyor, yeni grafiklerin etiketleri İngilizce. Kalan: gül–lale yorumunu README'ye yazmak
+- [x] 3. Grafikler ve confusion matrix kaydediliyor, yeni grafiklerin etiketleri İngilizce. Gül–lale yorumu README'de
 - [x] 4. MobileNetV2 transfer learning ve fine-tuning (%93.45)
 - [x] 5. `inference.py` / `app.py` güncellendi ve iki modelle gerçek API üzerinden test edildi
 - [x] 6. Model dosyaları optimizer'sız kaydedildi (bkz. "Space hazırlığı"), `space/` klasörü sade `requirements.txt` ile hazır
-- [ ] 7. Hugging Face Spaces deploy: **engellendi**. Gradio Space'i ücretsiz `cpu-basic`'te barındırmak PRO abonelik gerektiriyor (bkz. açık karar 1)
-- [ ] 8. README'yi İngilizce yeniden yazmak
+- [x] 7. Canlı demo: **D seçeneği**. Space yerine README'de ekran görüntüleri kullanılıyor. Gradio Space'i ücretsiz `cpu-basic`'te barındırmak PRO abonelik gerektiriyor. `space/` klasörü ileride kullanılmak üzere repoda duruyor
+- [x] 8. README İngilizce olarak yeniden yazıldı (bkz. "README" bölümü)
 - [ ] 9. GitHub About ve topic'ler, main'e merge
 
 ## Açık kararlar
 
-1. **Canlı demo nerede çalışacak?**
-   - A) Hugging Face PRO abonelik. `space/` klasörü hazır olduğu için yükleme tek komut.
-   - B) Ücretsiz statik Space. Modeli TensorFlow.js veya ONNX'e çevirip tarayıcıda çalıştırmak gerekir. Gradio arayüzü kullanılamaz, dönüşümün Keras 3 modelleriyle çalıştığı ayrıca test edilmeli. Ciddi ek iş.
-   - C) Gradio uygulamasını barındıran başka bir servis.
-   - D) Canlı demo olmadan README'de ekran görüntüsü ya da GIF.
-2. **Model dosyaları ve Git geçmişi:** `improvements` branch'inin geçmişinde birkaç model dosyası birikti:
+1. **Model dosyaları ve Git geçmişi:** `improvements` branch'inin geçmişinde birkaç model dosyası birikti:
    - `03b15df`: 22MB'lık eski MobileNetV2
    - `7902072`: 10MB'lık MobileNetV2
    - bu commit: 22MB'lık MobileNetV2
