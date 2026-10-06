@@ -17,7 +17,7 @@ MODEL_CONFIGS = {
         "img_size": (224, 224),
         "normalize": False,
     },
-    "Özel CNN": {
+    "Custom CNN": {
         "path": "best_model.keras",
         "img_size": (180, 180),
         "normalize": True,
@@ -53,7 +53,7 @@ def preprocess_image(image, img_size, normalize):
 
     image = tf.cast(image, tf.float32)
 
-    # Özel CNN 0-1 aralığında piksel bekler
+    # Custom CNN 0-1 aralığında piksel bekler
     if normalize:
         image = image / 255.0
 

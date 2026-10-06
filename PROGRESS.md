@@ -101,7 +101,22 @@ Ham metrikler ve confusion matrix'ler `images/*_metrics.json` dosyalarında.
   - README'deki görüntü yollarının hepsi mevcut.
   - Baseline'daki Dense katmanının parametre sayısı (6,553,728) modelden okunarak doğrulandı.
   - Alıcı alan (receptive field) hesabı: 3 blokta 22 piksel, 4 blokta 46 piksel.
-- **Bilinen tutarsızlık:** Gradio arayüzü hâlâ Türkçe ("Çiçek Fotoğrafı Yükle", "Özel CNN"). README bunu açıklıyor ve gelecek çalışmalara ekliyor.
+- **Gradio arayüzü İngilizceye çevrildi** (kökte ve `space/` kopyasında):
+  - başlık: "Flower Species Classification"
+  - açıklama metni
+  - etiketler: "Upload a flower photo", "Model", "Predictions"
+  - model adı: "Özel CNN" yerine "Custom CNN"
+
+  `space/` kopyasından başlatılan uygulamanın `/config` çıktısında bütün metinlerin İngilizce olduğu ve iki modelin de tahmin yaptığı doğrulandı. README'deki "Özel CNN" açıklaması ve gelecek çalışmalardaki dil maddesi kaldırıldı.
+- **Bekleyen:** `images/demo_tulips.png`, `demo_daisy.png` ve `demo_rose.png` hâlâ Türkçe arayüzü gösteriyor. Ekran görüntüleri yeniden alınınca aynı dosya adlarıyla değiştirilecek.
+- **Fine-tuning'deki iki değişikliğin etkisi ayrıştırıldı** (README 5. bölüm):
+  - **Sıçrama BatchNorm'dan.** İki deneme 1. aşamanın son epoch'una kadar birebir aynı. Sıçrama fine-tuning'in 1. epoch'unda oluyor: eğitim loss'u BN eğitilebilirken 0.498, donukken 0.250. Patience bir epoch'un iyileşmemesinden sonra devreye girdiği için ilk epoch'u etkileyemez. Dolayısıyla sıçramanın kaybolması BN değişikliğine bağlanabilir.
+  - **Patience sadece eğitimi uzattı.** Log'dan yapılan simülasyona göre ikinci deneme patience 3 ile 7. fine-tuning epoch'unda dururdu ve validation loss 0.272 olurdu. Patience 5 eğitimi 0.244'e kadar sürdürdü.
+- **`e53ebdf` doğrulandı.**
+  - `origin/main`'in atasıdır, squash merge sonrası da main geçmişinde kalır.
+  - O commit'teki `best_model.keras`, `baseline_model.keras` ile aynı blob (`c9a6cfc`).
+  - main'de bu dosyayı değiştiren başka commit yok.
+  - README'de dosyaya o commit üzerinden link verildi.
 
 ## Yapılan değişiklikler
 

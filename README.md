@@ -75,7 +75,9 @@ Stage 2 unfreezes the last 30 layers of MobileNetV2 and trains them with Adam at
 
 - The jump disappeared. Validation loss fell from 0.302 to **0.244**.
 - The rule set in advance was to keep the fine-tuned model only if its validation loss beat the stage-1 model's. It did, and its test accuracy turned out to be **93.45%**.
-- Because training is deterministic, stage 1 was identical in both attempts. The comparison isolates the BatchNorm change and the patience change. These two changes were made together, so their individual effects are not separated.
+- **Which change did what.** Training is deterministic, so both attempts were identical up to the last stage-1 epoch (training loss 0.274, validation loss 0.302).
+  - **The jump came from BatchNorm.** It happened in the very first fine-tuning epoch: training loss was 0.498 with trainable BatchNorm and 0.250 with frozen BatchNorm. Early-stopping patience only acts after an epoch fails to improve, so it cannot affect that first epoch. The jump's disappearance is therefore due to the BatchNorm change.
+  - **Patience only let training run longer.** With patience 3, the second attempt would have stopped after 7 fine-tuning epochs at a validation loss of 0.272, still better than stage 1. Patience 5 let it continue to 0.244.
 
 ## Training curves
 
@@ -137,7 +139,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Open the local URL printed in the terminal, upload a photo and choose a model. The default is MobileNetV2. "Özel CNN" ("custom CNN") is the deeper CNN.
+Open the local URL printed in the terminal, upload a photo and choose a model: MobileNetV2 (default) or Custom CNN (the deeper CNN).
 
 | | |
 |---|---|
@@ -173,7 +175,7 @@ python transfer_learning.py   # MobileNetV2         -> mobilenetv2_model.keras
 └── requirements.txt
 ```
 
-The original baseline model (80 MB) is not in the working tree. It is available in the repository history as `best_model.keras` in commit `e53ebdf`.
+The original baseline model (80 MB) is not in the working tree. It is available in the repository history as [`best_model.keras` in commit `e53ebdf`](https://github.com/kubraaucar/CNN-Flower-Species-Classification/blob/e53ebdf/best_model.keras).
 
 ## Future work
 
@@ -184,12 +186,10 @@ The original baseline model (80 MB) is not in the working tree. It is available 
 - **Variance across runs:** the validation set has 551 images, so one image is about 0.18 points. Repeated runs with different seeds or cross-validation would show how much of each gap is noise.
 - **Hyperparameter search:**
   - number of unfrozen layers and learning rate
-  - separate the effect of frozen BatchNorm from the higher early-stopping patience
   - other backbones such as EfficientNet
 - **Live demo:**
   - The `space/` folder is ready for Hugging Face Spaces, but Gradio Spaces on free hardware currently require a PRO subscription.
   - Alternatively, the model could run in the browser via TensorFlow.js or ONNX.
-- **App language:** translate the Gradio interface, which is currently in Turkish.
 
 ## Tech stack
 

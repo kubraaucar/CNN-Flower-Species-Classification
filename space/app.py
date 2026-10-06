@@ -9,7 +9,7 @@ demo = gr.Interface(
     inputs=[
         gr.Image(
             type="numpy",
-            label="Çiçek Fotoğrafı Yükle"
+            label="Upload a flower photo"
         ),
         gr.Radio(
             choices=list(MODEL_CONFIGS),
@@ -20,15 +20,15 @@ demo = gr.Interface(
 
     outputs=gr.Label(
         num_top_classes=3,
-        label="Tahmin Sonuçları"
+        label="Predictions"
     ),
 
-    title=" CNN Flower Classification",
+    title="Flower Species Classification",
 
     description=(
-        "Bir çiçek fotoğrafı yükleyin ve modeli seçin. "
-        "Model fotoğrafı analiz ederek "
-        "çiçek türünü tahmin edecektir."
+        "Upload a flower photo and choose a model. "
+        "The model predicts the species: daisy, dandelion, "
+        "rose, sunflower or tulip."
     )
 )
 
