@@ -108,7 +108,7 @@ Ham metrikler ve confusion matrix'ler `images/*_metrics.json` dosyalarında.
   - model adı: "Özel CNN" yerine "Custom CNN"
 
   `space/` kopyasından başlatılan uygulamanın `/config` çıktısında bütün metinlerin İngilizce olduğu ve iki modelin de tahmin yaptığı doğrulandı. README'deki "Özel CNN" açıklaması ve gelecek çalışmalardaki dil maddesi kaldırıldı.
-- **Bekleyen:** `images/demo_tulips.png`, `demo_daisy.png` ve `demo_rose.png` hâlâ Türkçe arayüzü gösteriyor. Ekran görüntüleri yeniden alınınca aynı dosya adlarıyla değiştirilecek.
+- **Ekran görüntüleri yenilendi.** `images/demo_tulips.png`, `demo_daisy.png` ve `demo_rose.png` İngilizce arayüzü gösteriyor ve eski dosyaların üzerine yazıldı. Yeni görüntüler `1.png`, `2.png` ve `3.png` adıyla gelmişti, içeriklerine göre doğru adlara çevrildi.
 - **Fine-tuning'deki iki değişikliğin etkisi ayrıştırıldı** (README 5. bölüm):
   - **Sıçrama BatchNorm'dan.** İki deneme 1. aşamanın son epoch'una kadar birebir aynı. Sıçrama fine-tuning'in 1. epoch'unda oluyor: eğitim loss'u BN eğitilebilirken 0.498, donukken 0.250. Patience bir epoch'un iyileşmemesinden sonra devreye girdiği için ilk epoch'u etkileyemez. Dolayısıyla sıçramanın kaybolması BN değişikliğine bağlanabilir.
   - **Patience sadece eğitimi uzattı.** Log'dan yapılan simülasyona göre ikinci deneme patience 3 ile 7. fine-tuning epoch'unda dururdu ve validation loss 0.272 olurdu. Patience 5 eğitimi 0.244'e kadar sürdürdü.
