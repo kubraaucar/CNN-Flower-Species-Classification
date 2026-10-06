@@ -1,317 +1,196 @@
-#  CNN ile Çiçek Türü Sınıflandırma
-<img width="1578" height="851" alt="Ekran görüntüsü 2026-10-05 215855" src="https://github.com/user-attachments/assets/5212264c-0009-4a94-aa65-e64ce63bccab" />
+# Flower Species Classification: Custom CNN vs. Transfer Learning
 
+![Gradio demo: MobileNetV2 classifies a tulip field](images/demo_tulips.png)
 
-Bu proje, çiçek görsellerini sınıflandırmak amacıyla **TensorFlow ve Keras** kullanılarak geliştirilmiş bir Evrişimsel Sinir Ağı (Convolutional Neural Network - CNN) uygulamasıdır.
+This project classifies flower photos into five species (daisy, dandelion, rose, sunflower, tulip) using the [`tf_flowers`](https://www.tensorflow.org/datasets/catalog/tf_flowers) dataset and TensorFlow / Keras.
 
-Model, **TensorFlow Flowers (`tf_flowers`)** veri seti üzerinde eğitilmiş ve verilen bir çiçek fotoğrafını 5 farklı çiçek türünden biri olarak sınıflandıracak şekilde geliştirilmiştir.
+It started from a custom CNN at **73.45%** test accuracy. A diagnosis-driven redesign of that CNN raised it to **83.09%** with 16× fewer parameters, and a fine-tuned **MobileNetV2** reached **93.45%**. A Gradio app lets you upload a photo and compare the two final models.
 
-Ayrıca eğitilen model, **Gradio** ile hazırlanan web arayüzü üzerinden kullanıcı tarafından yüklenen fotoğraflar üzerinde tahmin yapabilmektedir.
+## Results
 
----
+| Model | Parameters | Val accuracy | Test accuracy | Test loss |
+|---|---:|---:|---:|---:|
+| Baseline CNN (3 conv blocks, Flatten) | 6.65M | 72.78% | 73.45% | 0.717 |
+| CNN + Global Average Pooling | 110K | 68.06% | 70.55% | 0.753 |
+| Deeper CNN (4 conv blocks, BatchNorm, GAP) | 423K | 80.76% | 83.09% | 0.482 |
+| **MobileNetV2, fine-tuned** | 2.26M | **91.65%** | **93.45%** | **0.195** |
 
-##  Sınıflar
+- **Data split:** all models use the same split of the 3,670 images: 70% train (2,569), 15% validation (551), 15% test (550).
+- **Model selection:** checkpoints are selected on validation loss. The decision to keep the fine-tuned MobileNetV2 was also made on validation loss, before its test result was looked at. The test split is only used to report the numbers above.
+- **Reproducibility:** both training scripts are seeded and use `enable_op_determinism()`. Re-running `transfer_learning.py` reproduced the stage-1 validation losses exactly.
+- Raw metrics, including per-class precision/recall/F1 and confusion matrices, are in [`images/*_metrics.json`](images/).
 
-Model aşağıdaki 5 çiçek türünü sınıflandırmaktadır:
+## How the model improved
 
-- Karahindiba (Dandelion)
-- Papatya (Daisy)
-- Lale (Tulips)
-- Ayçiçeği (Sunflowers)
-- Gül (Roses)
+### 1. Baseline CNN: 73.45%
 
----
+The first model is a plain CNN:
 
-##  Veri Seti
+- three Conv2D + MaxPooling blocks (32, 64, 128 filters) on 180×180 inputs
+- `Flatten`, `Dense(128)`, `Dropout(0.5)` and a softmax output
+- training augmentation: random flip, brightness, contrast and crop
 
-Projede TensorFlow Datasets üzerinden sağlanan **`tf_flowers`** veri seti kullanılmıştır.
+The model has 6.65M parameters, and **6.55M of them sit in the single Dense layer after `Flatten`**.
 
-Veri seti eğitim, doğrulama ve test olmak üzere üç bölüme ayrılmıştır:
+### 2. Global Average Pooling: 70.55%, worse
 
-| Veri | Oran |
-|---|---:|
-| Eğitim (Train) | %70 |
-| Doğrulama (Validation) | %15 |
-| Test | %15 |
+Replacing `Flatten` with `GlobalAveragePooling2D` cut the parameters from 6.65M to 110K, but accuracy dropped.
 
-Test veri setinde toplam **550 görüntü** bulunmaktadır.
+The training curves show this was **underfitting, not overfitting**: training accuracy stopped at about 72% and validation at about 69%. There were two reasons:
 
----
+- **Small receptive field.** After three 3×3 convolutions and poolings, each feature sees only about a 22×22-pixel patch of the image. Global average pooling then averages these local features, so the model ends up judging mostly by local colour and texture. The baseline's large Dense layer could also use *where* each feature appeared in the image. GAP throws that information away.
+- **Learning rate dropped too fast.** `ReduceLROnPlateau` with patience 2 cut the learning rate from 1e-3 to 8e-6 within six epochs, which froze training early.
 
-##  CNN Model Mimarisi
+### 3. Deeper CNN with BatchNorm: 83.09%
 
-Projede özel bir CNN mimarisi oluşturulmuştur.
+The fix targeted that diagnosis:
 
-Model yapısı:
+- **A fourth conv block (256 filters)** widens the receptive field to about 46×46 pixels.
+- **Conv → BatchNorm → ReLU** in every block speeds up and stabilises training.
+- **`ReduceLROnPlateau` patience raised to 3.**
 
-```text
-Girdi Görüntüsü (180x180x3)
-        ↓
-Conv2D (32 filtre, ReLU)
-        ↓
-MaxPooling2D
-        ↓
-Conv2D (64 filtre, ReLU)
-        ↓
-MaxPooling2D
-        ↓
-Conv2D (128 filtre, ReLU)
-        ↓
-MaxPooling2D
-        ↓
-Flatten
-        ↓
-Dense (128, ReLU)
-        ↓
-Dropout (0.5)
-        ↓
-Dense (5, Softmax)
-```
+Training and validation accuracy now track each other (83% / 81%), so the underfitting is gone. The result is **9.6 points above the baseline with 16× fewer parameters**. Dandelion → sunflower confusions, two yellow, radial flowers, dropped from 16 to 4.
 
-Model yaklaşık **6.65 milyon parametreye** sahiptir.
+### 4. Transfer learning with MobileNetV2: 89.64%
 
----
+[`transfer_learning.py`](transfer_learning.py) uses MobileNetV2 with ImageNet weights on 224×224 inputs:
 
-##  Veri Artırma (Data Augmentation)
+- **Inside the model:** pixel rescaling to [-1, 1] and data augmentation (flip, rotation, zoom, contrast). The model takes raw 0–255 images, so the app cannot apply the wrong preprocessing.
+- **Head:** global average pooling, dropout 0.3 and a softmax layer.
 
-Modelin yalnızca eğitim görüntülerini ezberlemesini azaltmak ve farklı görüntülere karşı daha iyi genelleme yapabilmesini sağlamak amacıyla veri artırma teknikleri uygulanmıştır.
+Stage 1 trains only this head with the base frozen (Adam 1e-3, 10 epochs). This alone reaches a validation loss of 0.302 and **89.64%** test accuracy.
 
-Eğitim verilerinde kullanılan işlemler:
+### 5. Fine-tuning and the BatchNorm problem: 93.45%
 
-- Rastgele yatay çevirme
-- Parlaklık değiştirme
-- Kontrast değiştirme
-- Rastgele kırpma
-- Görüntü boyutlandırma
-- Piksel değerlerini normalize etme
+Stage 2 unfreezes the last 30 layers of MobileNetV2 and trains them with Adam at 1e-5.
 
-Doğrulama ve test görüntülerinde ise yalnızca yeniden boyutlandırma ve normalizasyon işlemleri uygulanmıştır.
+**First attempt:** the BatchNorm layers inside the unfrozen block were trainable. As soon as fine-tuning started:
 
----
+- training loss jumped from 0.27 to 0.50 and validation loss got worse
+- early stopping (patience 3) ended fine-tuning after 4 epochs, so selection kept the stage-1 model
 
-##  Model Eğitimi
+![First fine-tuning attempt with trainable BatchNorm layers](images/mobilenetv2_ft_trainable_bn_training_curves.png)
 
-Model aşağıdaki ayarlar kullanılarak eğitilmiştir:
+**Second attempt:** the 11 BatchNorm layers in the unfrozen block were kept frozen, so only the 10 convolutional layers were trained, and early-stopping patience was raised to 5.
 
-- **Optimizer:** Adam
-- **Learning Rate:** 0.001
-- **Loss Function:** Sparse Categorical Crossentropy
-- **Batch Size:** 32
-- **Maksimum Epoch:** 10
+- The jump disappeared. Validation loss fell from 0.302 to **0.244**.
+- The rule set in advance was to keep the fine-tuned model only if its validation loss beat the stage-1 model's. It did, and its test accuracy turned out to be **93.45%**.
+- **Which change did what.** Training is deterministic, so both attempts were identical up to the last stage-1 epoch (training loss 0.274, validation loss 0.302).
+  - **The jump came from BatchNorm.** It happened in the very first fine-tuning epoch: training loss was 0.498 with trainable BatchNorm and 0.250 with frozen BatchNorm. Early-stopping patience only acts after an epoch fails to improve, so it cannot affect that first epoch. The jump's disappearance is therefore due to the BatchNorm change.
+  - **Patience only let training run longer.** With patience 3, the second attempt would have stopped after 7 fine-tuning epochs at a validation loss of 0.272, still better than stage 1. Patience 5 let it continue to 0.244.
 
-Eğitim sırasında aşağıdaki callback yapıları kullanılmıştır:
+## Training curves
 
-- **EarlyStopping:** Modelin gelişimi durduğunda gereksiz eğitimi önlemek için
-- **ReduceLROnPlateau:** Doğrulama kaybındaki gelişim durduğunda öğrenme oranını azaltmak için
-- **ModelCheckpoint:** En iyi modeli kaydetmek için
+**Deeper CNN.** The validation loss is noisy in the first epochs while the BatchNorm statistics settle, then follows the training loss closely.
 
-En iyi model:
+![Deeper CNN training curves](images/cnn_deep_training_curves.png)
 
-```text
-best_model.keras
-```
+**MobileNetV2.** The dashed line marks the start of fine-tuning. Validation loss levels off around 0.25 while training accuracy keeps rising, so longer training would mostly add overfitting.
 
-dosyasında saklanmaktadır.
+![MobileNetV2 training curves](images/mobilenetv2_training_curves.png)
 
----
+## Confusion matrices
 
-##  Model Performansı
+| Deeper CNN (83.09%) | MobileNetV2, fine-tuned (93.45%) |
+|---|---|
+| ![Deeper CNN confusion matrix](images/cnn_deep_confusion_matrix.png) | ![MobileNetV2 confusion matrix](images/mobilenetv2_confusion_matrix.png) |
 
-Eğitilen CNN modeli test veri setinde:
+## Roses vs. tulips: the hardest pair
 
-**Test Accuracy: %73.45**
+Across all four models, the rose–tulip pair causes roughly a third or more of all errors:
 
-**Test Loss: 0.7170**
+| | Baseline | CNN + GAP | Deeper CNN | MobileNetV2 |
+|---|---:|---:|---:|---:|
+| Total test errors | 146 | 162 | 93 | 36 |
+| Rose → tulip | 27 | 28 | 21 | 5 |
+| Tulip → rose | 19 | 26 | 11 | 10 |
+| **Share of all errors** | **32%** | **33%** | **34%** | **42%** |
 
-sonuçlarını elde etmiştir.
+Roses and tulips share the same colour range (red, pink, yellow, orange), and a half-open rose has the same cup shape as a tulip. Telling them apart requires fine detail: the layered, spiralled petals of a rose against the smooth petals of a tulip.
 
-Sınıf bazında elde edilen sonuçlar:
+MobileNetV2 cut these errors from 46 to 15, but other errors fell even faster. **Rose vs. tulip is what remains once the easy mistakes are gone.**
 
-| Sınıf | Precision | Recall | F1-Score |
-|---|---:|---:|---:|
-| Karahindiba | 0.84 | 0.72 | 0.78 |
-| Papatya | 0.71 | 0.78 | 0.74 |
-| Lale | 0.70 | 0.70 | 0.70 |
-| Ayçiçeği | 0.74 | 0.90 | 0.81 |
-| Gül | 0.69 | 0.59 | 0.64 |
+<img src="images/rose_tulip_example.png" alt="Yellow-orange rose from the test split" width="420">
 
-En yüksek F1-score değeri **0.81 ile ayçiçeği sınıfında** elde edilmiştir.
+This rose from the test split is a typical case:
 
-Sonuçlar incelendiğinde modelin bazı çiçek türlerini diğerlerinden daha başarılı şekilde ayırt edebildiği görülmektedir.
+- deeper CNN: *tulip* (0.60), with rose at 0.27
+- MobileNetV2 before fine-tuning: *tulip* (0.60)
+- fine-tuned MobileNetV2: correctly *rose* (0.82)
 
----
+## Running the project
 
-##  Tahmin (Inference)
-
-Eğitilmiş model, eğitim sürecinden bağımsız olarak yeni çiçek görüntüleri üzerinde tahmin yapabilmektedir.
-
-Tahmin süreci:
-
-```text
-Kullanıcı Görseli
-       ↓
-180x180 Boyutlandırma
-       ↓
-Normalizasyon
-       ↓
-CNN Modeli
-       ↓
-Softmax Olasılıkları
-       ↓
-Çiçek Türü Tahmini
-```
-
-Örnek bir görüntü için model çıktısı:
-
-```text
-roses:       %55.69
-tulips:      %20.48
-daisy:       %19.56
-sunflowers:   %2.99
-dandelion:    %1.28
-```
-
-Bu sayede yalnızca en yüksek tahmin değil, modelin diğer sınıflara verdiği olasılıklar da görüntülenebilmektedir.
-
----
-
-##  Gradio Web Arayüzü
-
-Modelin daha kolay kullanılabilmesi için **Gradio** kullanılarak basit bir web arayüzü geliştirilmiştir.
-
-Kullanıcı bir çiçek fotoğrafı yüklediğinde sistem:
-
-```text
-Fotoğraf Yükleme
-       ↓
-Görüntü Ön İşleme
-       ↓
-CNN Modeli
-       ↓
-Sınıf Olasılıkları
-       ↓
-Tahmin Sonuçları
-```
-
-adımlarını gerçekleştirerek en olası çiçek türlerini kullanıcıya göstermektedir.
-
----
-
-##  Uygulama Görüntüsü
-
-Gradio arayüzünün ekran görüntüsü bu bölüme eklenecektir.
-
-<img width="1582" height="842" alt="Ekran görüntüsü 2026-10-05 215839" src="https://github.com/user-attachments/assets/94c15b03-431b-4e83-85a7-ca1b3b875337" />
-<img width="1585" height="848" alt="Ekran görüntüsü 2026-10-05 215806" src="https://github.com/user-attachments/assets/5fa4414f-7d5e-4d03-bd0c-cc47186ec883" />
-<img width="1577" height="852" alt="Ekran görüntüsü 2026-10-05 215723" src="https://github.com/user-attachments/assets/d897b46e-4a95-4041-8f22-3079f9e1ea90" />
-
----
-
-##  Kurulum
-
-Projeyi bilgisayarınıza klonlayın:
+### Installation
 
 ```bash
 git clone https://github.com/kubraaucar/CNN-Flower-Species-Classification.git
-```
-
-Proje klasörüne girin:
-
-```bash
 cd CNN-Flower-Species-Classification
-```
 
-Sanal ortam oluşturun:
-
-```bash
 python -m venv venv
-```
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # macOS / Linux
 
-Windows üzerinde sanal ortamı aktif edin:
-
-```bash
-venv\Scripts\activate
-```
-
-Gerekli kütüphaneleri yükleyin:
-
-```bash
 pip install -r requirements.txt
 ```
 
----
-
-##  Uygulamayı Çalıştırma
-
-Gradio uygulamasını başlatmak için:
+### Gradio app
 
 ```bash
 python app.py
 ```
 
-Komut çalıştırıldıktan sonra terminalde gösterilen yerel Gradio adresini tarayıcıda açın.
+Open the local URL printed in the terminal, upload a photo and choose a model: MobileNetV2 (default) or Custom CNN (the deeper CNN).
 
-Ardından bir çiçek fotoğrafı yükleyerek modelin tahminlerini görüntüleyebilirsiniz.
+| | |
+|---|---|
+| ![Demo: daisy](images/demo_daisy.png) | ![Demo: rose](images/demo_rose.png) |
 
----
+### Training
 
-##  Proje Yapısı
-
-```text
-CNN-Flower-Species-Classification/
-│
-├── app.py
-├── cnn.py
-├── inference.py
-├── best_model.keras
-├── requirements.txt
-├── .gitignore
-└── README.md
+```bash
+python cnn.py                 # deeper custom CNN   -> best_model.keras
+python transfer_learning.py   # MobileNetV2         -> mobilenetv2_model.keras
 ```
 
-### `cnn.py`
+- **Dataset:** `tf_flowers` is downloaded automatically by TensorFlow Datasets on the first run.
+- **Training time:** on an 8-core CPU, each script takes roughly 35–50 minutes.
+- **Outputs:**
+  - Training curves, confusion matrices and metrics are written to `images/`.
+  - Retraining overwrites the model files.
+  - The committed models were re-saved without optimizer state (5.2 MB → 1.8 MB and 21.8 MB → 9.7 MB, identical predictions).
 
-Veri setinin yüklenmesi, ön işleme, veri artırma, CNN modelinin oluşturulması, eğitilmesi ve değerlendirilmesi işlemlerini içerir.
+## Project structure
 
-### `inference.py`
+```text
+├── app.py                    Gradio interface with a model selector
+├── inference.py              per-model preprocessing and prediction
+├── cnn.py                    custom CNN: training and evaluation
+├── transfer_learning.py      MobileNetV2: frozen-base training + fine-tuning
+├── best_model.keras          deeper custom CNN (4 blocks, BatchNorm, GAP)
+├── cnn_gap_model.keras       3-block GAP CNN from step 2, kept for comparison
+├── mobilenetv2_model.keras   fine-tuned MobileNetV2 (default model in the app)
+├── images/                   training curves, confusion matrices, metrics JSON, screenshots
+├── space/                    ready-to-upload Hugging Face Spaces folder (not deployed)
+├── PROGRESS.md               development log (in Turkish)
+└── requirements.txt
+```
 
-Kaydedilmiş modeli yükler ve yeni görüntüler üzerinde tahmin yapılmasını sağlar.
+The original baseline model (80 MB) is not in the working tree. It is available in the repository history as [`best_model.keras` in commit `e53ebdf`](https://github.com/kubraaucar/CNN-Flower-Species-Classification/blob/e53ebdf/best_model.keras).
 
-### `app.py`
+## Future work
 
-Gradio kullanılarak oluşturulan kullanıcı arayüzünü içerir.
+- **Rose vs. tulip:**
+  - Look at the remaining misclassified images.
+  - Try higher input resolution or unfreezing more layers so the model can use petal structure.
+- **Grad-CAM:** check what each model looks at, and test whether the shallow CNNs really rely on colour.
+- **Variance across runs:** the validation set has 551 images, so one image is about 0.18 points. Repeated runs with different seeds or cross-validation would show how much of each gap is noise.
+- **Hyperparameter search:**
+  - number of unfrozen layers and learning rate
+  - other backbones such as EfficientNet
+- **Live demo:**
+  - The `space/` folder is ready for Hugging Face Spaces, but Gradio Spaces on free hardware currently require a PRO subscription.
+  - Alternatively, the model could run in the browser via TensorFlow.js or ONNX.
 
-### `best_model.keras`
+## Tech stack
 
-Eğitim sırasında elde edilen en iyi modelin kaydedilmiş halidir.
-
----
-
-##  Kullanılan Teknolojiler
-
-- Python
-- TensorFlow
-- Keras
-- TensorFlow Datasets
-- NumPy
-- Matplotlib
-- Scikit-learn
-- Gradio
-
----
-
-##  Gelecekte Yapılabilecek Geliştirmeler
-
-Projenin sonraki aşamalarında:
-
-- MobileNetV2 veya EfficientNet ile Transfer Learning
-- Flatten yerine Global Average Pooling kullanımı
-- Hiperparametre optimizasyonu
-- Veri artırma yöntemlerinin geliştirilmesi
-- Yanlış sınıflandırılan görüntülerin analizi
-- Model doğruluğunun artırılması
-- Gradio uygulamasının çevrim içi yayınlanması
-
-gibi geliştirmeler yapılabilir.
-
----
+Python · TensorFlow / Keras · TensorFlow Datasets · NumPy · scikit-learn · Matplotlib · Gradio
