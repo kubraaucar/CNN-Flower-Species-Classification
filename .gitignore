@@ -15,3 +15,6 @@ Thumbs.db
 .gradio/
 # 80MB baseline model backup, kept locally only
 baseline_model.keras
+
+# Claude Code local settings
+.claude/settings.local.json

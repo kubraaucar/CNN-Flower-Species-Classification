@@ -34,6 +34,7 @@ IMAGES_DIR = "images"
 FINE_TUNE_LAYERS = 30  # gövdenin çözülecek son katman sayısı
 
 tf.keras.utils.set_random_seed(42)
+tf.config.experimental.enable_op_determinism()  # cnn.py ile aynı şekilde tekrarlanabilir
 os.makedirs(IMAGES_DIR, exist_ok=True)
 
 # veri seti yükleme (cnn.py ile aynı bölme)
@@ -52,7 +53,7 @@ def resize(image, label):
     return tf.image.resize(image, IMG_SIZE), label
 
 
-ds_train = ds_train.map(resize, num_parallel_calls=AUTOTUNE).shuffle(1000).batch(BATCH_SIZE).prefetch(AUTOTUNE)
+ds_train = ds_train.map(resize, num_parallel_calls=AUTOTUNE).shuffle(1000, seed=42).batch(BATCH_SIZE).prefetch(AUTOTUNE)
 ds_val = ds_val.map(resize, num_parallel_calls=AUTOTUNE).batch(BATCH_SIZE).prefetch(AUTOTUNE)
 ds_test = ds_test.map(resize, num_parallel_calls=AUTOTUNE).batch(BATCH_SIZE).prefetch(AUTOTUNE)
 
@@ -111,7 +112,7 @@ model.compile(
 history_2 = model.fit(
     ds_train,
     validation_data=ds_val,
-    epochs=10,
+    epochs=20,  # EarlyStopping daha önce durdurabilir
     callbacks=[
         EarlyStopping(monitor="val_loss", patience=3, restore_best_weights=True),
         # sadece 1. aşamanın en iyi val_loss değerinden daha iyiyse kaydet
@@ -120,8 +121,13 @@ history_2 = model.fit(
     ]
 )
 
-# test değerlendirmesi (iki aşamanın en iyisi)
+# iki aşamanın validation loss'a göre en iyisi
 model = load_model(MODEL_PATH)
+val_loss, val_accuracy = model.evaluate(ds_val)
+print(f"Validation Loss: {val_loss:.4f}")
+print(f"Validation Accuracy: {val_accuracy:.4f}")
+
+# test değerlendirmesi (sadece raporlama için)
 test_loss, test_accuracy = model.evaluate(ds_test)
 print(f"Test Loss: {test_loss:.4f}")
 print(f"Test Accuracy: {test_accuracy:.4f}")
@@ -137,7 +143,8 @@ print(classification_report(y_true, y_pred, target_names=class_names, digits=2))
 report = classification_report(y_true, y_pred, target_names=class_names, output_dict=True)
 cm = confusion_matrix(y_true, y_pred)
 with open(os.path.join(IMAGES_DIR, "mobilenetv2_metrics.json"), "w") as f:
-    json.dump({"test_loss": test_loss, "test_accuracy": test_accuracy, "report": report,
+    json.dump({"val_loss": val_loss, "val_accuracy": val_accuracy,
+               "test_loss": test_loss, "test_accuracy": test_accuracy, "report": report,
                "confusion_matrix": cm.tolist()}, f, indent=2)
 
 # confusion matrix
@@ -159,9 +166,9 @@ plt.figure(figsize=(12, 5))
 for i, (train_values, val_values, title) in enumerate(
         [(acc, val_acc, "Accuracy"), (loss, val_loss, "Loss")]):
     plt.subplot(1, 2, i + 1)
-    plt.plot(train_values, label="Eğitim")
-    plt.plot(val_values, label="Validasyon")
-    plt.axvline(fine_tune_start - 0.5, color="gray", linestyle="--", label="Fine-tuning başlangıcı")
+    plt.plot(train_values, label="Train")
+    plt.plot(val_values, label="Validation")
+    plt.axvline(fine_tune_start - 0.5, color="gray", linestyle="--", label="Fine-tuning start")
     plt.xlabel("Epoch")
     plt.ylabel(title)
     plt.title(f"MobileNetV2 - {title}")

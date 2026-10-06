@@ -12,6 +12,8 @@ from tensorflow.keras.layers import(
     Conv2D, #2D convolutional layer
     MaxPooling2D, # max pooling layer
     GlobalAveragePooling2D, # her feature map'in ortalamasını alarak tek boyutlu hale getirme
+    BatchNormalization, # her batch'te aktivasyonları normalize eder, egitimi hizlandirir ve stabil hale getirir
+    Activation, # aktivasyon fonksiyonunu ayri katman olarak uygulamak icin (Conv -> BN -> ReLU)
     Dense, # tam baglantili katman , karar verme(classification)
     Dropout # rastgele noronları kapatma ve overfitting engelleme, ezberi engeller
 )
@@ -44,6 +46,7 @@ tf.keras.utils.set_random_seed(SEED)
 tf.config.experimental.enable_op_determinism() #ayni seed ile ayni sonuclari almak icin
 
 IMAGES_DIR = "images" #grafiklerin kaydedilecegi klasor
+RUN_NAME = "cnn_deep" #grafik ve metrik dosyalarinin on eki (4 bloklu, BatchNorm'lu, GAP'li CNN)
 os.makedirs(IMAGES_DIR, exist_ok=True)
 
 # veri seti yükleme
@@ -130,14 +133,26 @@ ds_test = (
 
 model = Sequential([
 
-    #Feature Extraction Layers
-    Conv2D(32, (3,3), activation = "relu", input_shape = (*IMG_SIZE, 3)), #32filtre sayısı, 3x3kernel, relu aktivasyon fonks.,3kanal(RGB)
+    #Feature Extraction Layers: her blok Conv -> BatchNorm -> ReLU -> MaxPooling
+    Conv2D(32, (3,3), use_bias = False, input_shape = (*IMG_SIZE, 3)), #32filtre sayısı, 3x3kernel, 3kanal(RGB); bias'ı BatchNorm üstlenir
+    BatchNormalization(),
+    Activation("relu"),
     MaxPooling2D((2,2)),  #2x2 max pooling
 
-    Conv2D(64, (3,3), activation = "relu"), #64 filtre,3x3 kernel, relu aktivasyon
+    Conv2D(64, (3,3), use_bias = False), #64 filtre,3x3 kernel
+    BatchNormalization(),
+    Activation("relu"),
     MaxPooling2D((2,2)), #2x2 max pooling
 
-    Conv2D(128, (3,3), activation = "relu"), #128 filtre,3x3 kernel, relu aktivasyon
+    Conv2D(128, (3,3), use_bias = False), #128 filtre,3x3 kernel
+    BatchNormalization(),
+    Activation("relu"),
+    MaxPooling2D((2,2)), #2x2 max pooling
+
+    #4. blok: daha derin ozellikler ve daha genis gorus alani (GAP'li 3 blokluk model underfit oluyordu)
+    Conv2D(256, (3,3), use_bias = False), #256 filtre,3x3 kernel
+    BatchNormalization(),
+    Activation("relu"),
     MaxPooling2D((2,2)), #2x2 max pooling
 
     #Classification Layers
@@ -153,8 +168,8 @@ callbacks = [
     #eger val loss 5 epoch boyunca iyilesmezse egitimi durdur ve en iyi agırlıkları yukle
     EarlyStopping(monitor = "val_loss", patience = 5, restore_best_weights = True),
 
-    #val loss 2 epoch boyunca iyilesmezse learning rate 0.2 çarpanı ile azalt
-    ReduceLROnPlateau(monitor = "val_loss", factor = 0.2, patience = 2, verbose = 1, min_lr = 1e-9), #ogrenme oranını azaltma
+    #val loss 3 epoch boyunca iyilesmezse learning rate 0.2 çarpanı ile azalt
+    ReduceLROnPlateau(monitor = "val_loss", factor = 0.2, patience = 3, verbose = 1, min_lr = 1e-9), #ogrenme oranını azaltma
 
     #her epoch sonunda eger model daha iyiise kaybolur
     ModelCheckpoint(
@@ -185,7 +200,13 @@ history = model.fit(
 # Validation loss'a göre kaydedilen en iyi modeli yükle
 model = load_model("best_model.keras")
 
-# Test veri seti üzerinde modeli değerlendir
+# Model seçimi validation setine göre yapıldı; seçilen modelin validation sonucu
+val_loss, val_accuracy = model.evaluate(ds_val)
+
+print(f"Validation Loss: {val_loss:.4f}")
+print(f"Validation Accuracy: {val_accuracy:.4f}")
+
+# Test veri seti üzerinde modeli değerlendir (sadece raporlama için)
 test_loss, test_accuracy = model.evaluate(ds_test)
 
 print(f"Test Loss: {test_loss:.4f}")
@@ -229,8 +250,10 @@ print(
 cm = confusion_matrix(y_true, y_pred)
 
 # sonuçları dosyaya kaydet (README ve karşılaştırma için)
-with open(os.path.join(IMAGES_DIR, "cnn_gap_metrics.json"), "w") as f:
+with open(os.path.join(IMAGES_DIR, f"{RUN_NAME}_metrics.json"), "w") as f:
     json.dump({
+        "val_loss": val_loss,
+        "val_accuracy": val_accuracy,
         "test_loss": test_loss,
         "test_accuracy": test_accuracy,
         "report": classification_report(y_true, y_pred, target_names=class_names, output_dict=True),
@@ -243,9 +266,9 @@ disp = ConfusionMatrixDisplay(
 )
 
 disp.plot(cmap="Blues")
-plt.title("Confusion Matrix")
+plt.title("Custom CNN - Confusion Matrix")
 plt.tight_layout()
-plt.savefig(os.path.join(IMAGES_DIR, "cnn_gap_confusion_matrix.png"), dpi=120)
+plt.savefig(os.path.join(IMAGES_DIR, f"{RUN_NAME}_confusion_matrix.png"), dpi=120)
 plt.close()
 
 
@@ -254,23 +277,23 @@ plt.figure(figsize=(12,5))
 
 #dogruluk grafigi
 plt.subplot(1, 2, 1)
-plt.plot(history.history["accuracy"], label = "Egitim Dogrulugu")
-plt.plot(history.history["val_accuracy"], label = "Validasyon Dogrulugu")
+plt.plot(history.history["accuracy"], label = "Train")
+plt.plot(history.history["val_accuracy"], label = "Validation")
 plt.xlabel("Epoch")
 plt.ylabel("Accuracy")
-plt.title("Model Accuracy")
+plt.title("Custom CNN - Accuracy")
 plt.legend()
 
 #loss plot
 plt.subplot(1, 2, 2)
-plt.plot(history.history["loss"], label = "Egitim Kaybi")
-plt.plot(history.history["val_loss"], label = "Validasyon KAybi")
+plt.plot(history.history["loss"], label = "Train")
+plt.plot(history.history["val_loss"], label = "Validation")
 plt.xlabel("Epoch")
 plt.ylabel("Loss")
-plt.title("Model Loss")
+plt.title("Custom CNN - Loss")
 plt.legend()
 
 plt.tight_layout()
-plt.savefig(os.path.join(IMAGES_DIR, "cnn_gap_training_curves.png"), dpi=120)  #grafigi kaydet
+plt.savefig(os.path.join(IMAGES_DIR, f"{RUN_NAME}_training_curves.png"), dpi=120)  #grafigi kaydet
 plt.close()
 
