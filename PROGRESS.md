@@ -64,6 +64,25 @@ Ham metrikler ve confusion matrix'ler `images/*_metrics.json` dosyalarında.
 
   Bu görüntü README'deki gül–lale yorumu için iyi bir örnek.
 
+## Space hazırlığı (6. adım)
+
+- **Optimizer state'i silindi.**
+  - Keras 3'te `include_optimizer=False`, `.keras` formatında sessizce yok sayılıyor (sadece `.h5` için geçerli). Bu yüzden modeller `load_model(..., compile=False)` ile yüklenip yeniden kaydedildi.
+  - `model.weights.h5` içinde artık `optimizer` grubu yok.
+  - Boyutlar: derin CNN 5.2MB'tan 1.8MB'a, MobileNetV2 21.8MB'tan 9.7MB'a indi.
+- **Tahminler değişmedi.** Validation ve test setindeki 1101 görüntüde olasılıklar bit düzeyinde aynı (max fark 0). Test accuracy'leri de aynı: %83.09 ve %93.45.
+- **Kökteki model dosyaları da bu küçük sürümlerle değiştirildi.** `space/` içindekilerle byte olarak aynılar, bu yüzden Git ikisini tek blob olarak saklıyor. Not: bu dosyalardan eğitime kaldığı yerden devam edilemez. Yeniden eğitim script'leri zaten sıfırdan başlıyor.
+- `inference.py` modelleri `compile=False` ile yüklüyor.
+- `space/` klasörünün içeriği:
+  - `app.py`, `inference.py` ve iki model: kökteki dosyaların kopyası. **Kökte değişiklik yapınca buraya da kopyalanmalı.**
+  - `requirements.txt`: tensorflow 2.20.0, keras 3.13.2 ve numpy 2.4.2. Gradio, YAML'daki `sdk_version: 6.29.1` ile kuruluyor.
+  - `README.md`: Spaces YAML başlığı ve İngilizce kısa açıklama.
+- `space/` klasöründen yerelde import ve tahmin testi yapıldı: gül örneğinde MobileNetV2 gül 0.82, CNN lale 0.60.
+- **Deploy denemesi (2026-10-06):**
+  - Hesap `kuubraucar1` oldu (`hf auth whoami` çıktısı). `kubraucar1` diye bir hesap yok.
+  - `create_repo(space_sdk="gradio")` çağrısı **402 Payment Required** döndürdü: "Static Spaces are free for everyone, but hosting Gradio and Docker Spaces on free cpu-basic requires a PRO subscription."
+  - Space oluşturulmadı, Hub'da yarım kalan bir şey yok.
+
 ## Yapılan değişiklikler
 
 - `cnn.py`:
@@ -92,17 +111,22 @@ Ham metrikler ve confusion matrix'ler `images/*_metrics.json` dosyalarında.
 - [~] 3. Grafikler ve confusion matrix kaydediliyor, yeni grafiklerin etiketleri İngilizce. Kalan: gül–lale yorumunu README'ye yazmak
 - [x] 4. MobileNetV2 transfer learning ve fine-tuning (%93.45)
 - [x] 5. `inference.py` / `app.py` güncellendi ve iki modelle gerçek API üzerinden test edildi
-- [ ] 6. Model dosyası: LFS veya HF Hub, `requirements.txt`
-- [ ] 7. Hugging Face Spaces deploy
+- [x] 6. Model dosyaları optimizer'sız kaydedildi (bkz. "Space hazırlığı"), `space/` klasörü sade `requirements.txt` ile hazır
+- [ ] 7. Hugging Face Spaces deploy: **engellendi**. Gradio Space'i ücretsiz `cpu-basic`'te barındırmak PRO abonelik gerektiriyor (bkz. açık karar 1)
 - [ ] 8. README'yi İngilizce yeniden yazmak
 - [ ] 9. GitHub About ve topic'ler, main'e merge
 
 ## Açık kararlar
 
-1. **Model dosyaları ve Git geçmişi (6. adım):** `improvements` branch'inin geçmişinde birkaç model dosyası birikti:
+1. **Canlı demo nerede çalışacak?**
+   - A) Hugging Face PRO abonelik. `space/` klasörü hazır olduğu için yükleme tek komut.
+   - B) Ücretsiz statik Space. Modeli TensorFlow.js veya ONNX'e çevirip tarayıcıda çalıştırmak gerekir. Gradio arayüzü kullanılamaz, dönüşümün Keras 3 modelleriyle çalıştığı ayrıca test edilmeli. Ciddi ek iş.
+   - C) Gradio uygulamasını barındıran başka bir servis.
+   - D) Canlı demo olmadan README'de ekran görüntüsü ya da GIF.
+2. **Model dosyaları ve Git geçmişi:** `improvements` branch'inin geçmişinde birkaç model dosyası birikti:
    - `03b15df`: 22MB'lık eski MobileNetV2
    - `7902072`: 10MB'lık MobileNetV2
    - bu commit: 22MB'lık MobileNetV2
    - `main`'de zaten olan 80MB'lık orijinal `best_model.keras`
 
-   HF Hub veya LFS'e geçerken bu dosyaların geçmişten temizlenip temizlenmeyeceğine karar verilmeli (ör. merge yerine squash). Kaydederken optimizer state'i atılırsa MobileNetV2 dosyası yaklaşık 10MB'a iner.
+   HF Hub veya LFS'e geçerken bu dosyaların geçmişten temizlenip temizlenmeyeceğine karar verilmeli (ör. merge yerine squash). Güncel model dosyaları optimizer'sız (1.8MB ve 9.7MB), yani bundan sonraki commit'ler küçük olacak.
